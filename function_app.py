@@ -67,7 +67,7 @@ def pdf_analyzer_orchestrator(context):
 
     return stored
 
-#Activity Placeholder
+#Activity placeholders
 @myApp.activity_trigger(input_name="input_data")
 def extract_text(input_data):
     return "placeholder"
