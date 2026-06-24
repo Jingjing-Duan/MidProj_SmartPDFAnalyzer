@@ -1,3 +1,4 @@
+import re
 import logging
 import azure.functions as func
 import azure.durable_functions as df
@@ -79,13 +80,56 @@ def extract_metadata(input_data):
 
 
 @myApp.activity_trigger(input_name="input_data")
-def analyze_statistics(input_data):
-    return {}
+def analyze_statistics(input_data: dict):
+    logging.info("Role 3: Running text statistics analysis activity...")
+    try:
+        raw_text = input_data.get("raw_text", input_data.get("text", ""))
+        page_count = input_data.get("page_count", 1)
+        
+        words = raw_text.split()
+        word_count = len(words)
+        
+        pages = page_count if page_count > 0 else 1
+        avg_words_per_page = round(word_count / pages, 2)
+        estimated_reading_time_mins = round(word_count / 200, 2)
+        
+        return {
+            "pageCount": pages,
+            "wordCount": word_count,
+            "avgWordsPerPage": avg_words_per_page,
+            "estimatedReadingTimeMinutes": estimated_reading_time_mins
+        }
+    except Exception as e:
+        logging.error(f"Role 3 Statistics analysis failed: {str(e)}")
+        return {"error": str(e)}
 
 
 @myApp.activity_trigger(input_name="input_data")
-def detect_sensitive_data(input_data):
-    return {}
+def detect_sensitive_data(input_data: dict):
+    logging.info("Role 3: Scanning text for sensitive PII data...")
+    try:
+        raw_text = input_data.get("raw_text", input_data.get("text", ""))
+        
+        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        phone_pattern = r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'
+        url_pattern = r'https?://[^\s]+'
+        date_pattern = r'\b\d{4}[-/]\d{2}[-/]\d{2}\b|\b\d{2}[-/]\d{2}[-/]\d{4}\b'
+        
+        emails = list(set(re.findall(email_pattern, raw_text)))
+        phones = list(set(re.findall(phone_pattern, raw_text)))
+        urls = list(set(re.findall(url_pattern, raw_text)))
+        dates = list(set(re.findall(date_pattern, raw_text)))
+        
+        return {
+            "containsSensitiveData": bool(emails or phones or urls),
+            "foundEmails": emails,
+            "foundPhoneNumbers": phones,
+            "foundUrls": urls,
+            "foundDates": dates
+        }
+    except Exception as e:
+        logging.error(f"Role 3 Sensitive data scan failed: {str(e)}")
+        return {"error": str(e)}
 
 
 @myApp.activity_trigger(input_name="input_data")
