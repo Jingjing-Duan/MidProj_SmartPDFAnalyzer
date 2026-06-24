@@ -68,15 +68,76 @@ def pdf_analyzer_orchestrator(context):
 
     return stored
 
-#Activity placeholders
+#Extract Text
 @myApp.activity_trigger(input_name="input_data")
 def extract_text(input_data):
-    return "placeholder"
+    import io
+    import pypdf
+    import logging
+    
+    logging.info("Activity 'extract_text' started processing PDF...")
+    try:
+        pdf_bytes = bytes(input_data["blob_bytes"])
+        pdf_file = io.BytesIO(pdf_bytes)
+        
+        reader = pypdf.PdfReader(pdf_file)
+        page_count = len(reader.pages)
+        
+        extracted_text = ""
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                extracted_text += text + "\n"
+        
+        logging.info(f"Successfully extracted {len(extracted_text)} characters from {page_count} pages.")
+        
+        return {
+            "raw_text": extracted_text,
+            "page_count": page_count
+        }
+        
+    except Exception as e:
+        logging.error(f"Error in extract_text activity: {str(e)}")
+        return {
+            "raw_text": "",
+            "page_count": 0,
+            "error": str(e)
+        }
 
-
+#Extract Metadata
 @myApp.activity_trigger(input_name="input_data")
 def extract_metadata(input_data):
-    return {}
+    import io
+    import pypdf
+    import logging
+    
+    logging.info("Activity 'extract_metadata' started processing PDF...")
+    try:
+        pdf_bytes = bytes(input_data["blob_bytes"])
+        pdf_file = io.BytesIO(pdf_bytes)
+        
+        reader = pypdf.PdfReader(pdf_file)
+        meta = reader.metadata
+        
+        pdf_metadata = {
+            "title": meta.title if meta and meta.title else "Unknown",
+            "author": meta.author if meta and meta.author else "Unknown",
+            "subject": meta.subject if meta and meta.subject else "Unknown",
+            "creator": meta.creator if meta and meta.creator else "Unknown",
+            "producer": meta.producer if meta and meta.producer else "Unknown",
+            "creation_date": str(meta.creation_date) if meta and meta.creation_date else "Unknown"
+        }
+        
+        logging.info(f"Successfully extracted metadata: Title={pdf_metadata['title']}")
+        return pdf_metadata
+        
+    except Exception as e:
+        logging.error(f"Error in extract_metadata activity: {str(e)}")
+        return {
+            "title": "Unknown",
+            "author": "Unknown",
+            "error": str(e)
+        }
 
 
 @myApp.activity_trigger(input_name="input_data")
