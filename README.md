@@ -1,5 +1,7 @@
 # MidProj_SmartPDFAnalyzer
 
+# MidProj_SmartPDFAnalyzer
+
 ```mermaid
 ---
 title: "Midterm Project: Smart PDF Analyzer Architectural Flow"
@@ -27,7 +29,7 @@ flowchart TD
     Orchestrator -- call_activity --> ExtractText[extract_text<br/>Activity 1]:::extract
     Orchestrator -- call_activity --> ExtractMeta[extract_metadata<br/>Activity 2]:::extract
 
-    %% Role 3 Analytics Activities
+    %% Role 3 Analytics Activities (YOUR ROLE)
     Orchestrator -- call_activity --> AnalyzeStats[analyze_statistics<br/>Activity 3]:::analytics
     Orchestrator -- call_activity --> DetectSensitive[detect_sensitive_data<br/>Activity 4]:::analytics
 
