@@ -292,3 +292,85 @@ def store_results(input_data):
         "table_name": TABLE_NAME,
         "message": "Report stored successfully in Azure Table Storage."
     }
+
+# HTTP FUNCTION: Get Analysis Reports
+# GET /api/reports: Returns the last 10 reports by default.
+# GET /api/reports?limit=5: Returns the last 5 reports.
+# GET /api/reports/{id}: Returns one specific report by report ID.
+@myApp.route(route="reports/{report_id?}", methods=["GET"])
+def get_report(req: func.HttpRequest) -> func.HttpResponse:
+    report_id = req.route_params.get("report_id")
+
+    try:
+        table_client = get_table_client()
+
+        if report_id:
+            entity = table_client.get_entity(
+                partition_key="PDF_REPORT",
+                row_key=report_id
+            )
+
+            report = json.loads(entity["report_json"])
+
+            return json_response({
+                "mode": "single_report",
+                "report_id": report_id,
+                "report": report
+            })
+
+        limit_param = req.params.get("limit", "10")
+
+        try:
+            limit = int(limit_param)
+        except ValueError:
+            return json_response({
+                "error": "Invalid limit value. Limit must be a number."
+            }, status_code=400)
+
+        if limit <= 0:
+            return json_response({
+                "error": "Limit must be greater than 0."
+            }, status_code=400)
+
+        entities = table_client.query_entities(
+            query_filter="PartitionKey eq 'PDF_REPORT'"
+        )
+
+        reports = []
+
+        for entity in entities:
+            reports.append({
+                "report_id": entity.get("RowKey"),
+                "file_name": entity.get("file_name"),
+                "blob_name": entity.get("blob_name"),
+                "processed_at_utc": entity.get("processed_at_utc"),
+                "status": entity.get("status")
+            })
+
+        reports.sort(
+            key=lambda item: item.get("processed_at_utc") or "",
+            reverse=True
+        )
+
+        limited_reports = reports[:limit]
+
+        return json_response({
+            "mode": "report_list",
+            "count": len(limited_reports),
+            "limit": limit,
+            "reports": limited_reports
+        })
+
+    except ResourceNotFoundError:
+        return json_response({
+            "error": "Report not found",
+            "report_id": report_id
+        }, status_code=404)
+
+    except Exception as error:
+        logging.error("Error in get_report endpoint: %s", error)
+
+        return json_response({
+            "error": "Internal server error while retrieving report data.",
+            "details": str(error)
+        }, status_code=500)
