@@ -2,9 +2,50 @@ import re
 import logging
 import azure.functions as func
 import azure.durable_functions as df
+from datetime import datetime, timezone
+import json
+import os
+import uuid
+from azure.data.tables import TableServiceClient
+from azure.core.exceptions import ResourceNotFoundError
 
+# CREATE THE DURABLE FUNCTION APP
 myApp = df.DFApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
+# TABLE STORAGE HELPER
+# This helper function creates a connection to Azure Table Storage.
+# For local development, it connects to Azurite Table Storage.
+# In Azure, it connects to the Azure Storage Account.
+# The table is created automatically if it does not already exist.
+TABLE_NAME = os.environ.get("PDF_REPORT_TABLE_NAME", "PdfAnalysisReports")
+
+def get_table_client():
+    """
+    Get a TableClient for storing/retrieving PDF analysis reports.
+    The table is created automatically if it does not already exist.
+    """
+    connection_string = os.environ.get(
+        "PdfStorageConnection",
+        os.environ["AzureWebJobsStorage"]
+    )
+
+    table_service_client = TableServiceClient.from_connection_string(
+        conn_str=connection_string
+    )
+
+    table_client = table_service_client.create_table_if_not_exists(
+        table_name=TABLE_NAME
+    )
+
+    return table_client
+
+#  Return a JSON HTTP response.
+def json_response(data, status_code=200):
+    return func.HttpResponse(
+        json.dumps(data, indent=2),
+        status_code=status_code,
+        mimetype="application/json"
+    )
 #Blob Trigger
 @myApp.blob_trigger(
     arg_name="myblob",
@@ -191,7 +232,6 @@ def detect_sensitive_data(input_data: dict):
     except Exception as e:
         logging.error(f"Role 3 Sensitive data scan failed: {str(e)}")
         return {"error": str(e)}
-
 
 @myApp.activity_trigger(input_name="input_data")
 def generate_report(input_data):
