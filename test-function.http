@@ -1,0 +1,22 @@
+### Local - Get last 10 reports
+GET http://localhost:7071/api/reports
+
+
+### Local - Get last 5 reports
+GET http://localhost:7071/api/reports?limit=5
+
+
+### Local - Get one report by report ID
+GET http://localhost:7071/api/reports/<REPORT_ID>
+
+
+### Azure - Get last 10 reports
+GET https://<YOUR_FUNCTION_APP_NAME>.azurewebsites.net/api/reports
+
+
+### Azure - Get last 5 reports
+GET https://<YOUR_FUNCTION_APP_NAME>.azurewebsites.net/api/reports?limit=5
+
+
+### Azure - Get one report by report ID
+GET https://<YOUR_FUNCTION_APP_NAME>.azurewebsites.net/api/reports/<REPORT_ID>
