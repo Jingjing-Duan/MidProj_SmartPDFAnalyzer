@@ -233,13 +233,62 @@ def detect_sensitive_data(input_data: dict):
         logging.error(f"Role 3 Sensitive data scan failed: {str(e)}")
         return {"error": str(e)}
 
+# Activity: generate_report: Combines the results from the 4 parallel activities
+# into one structured JSON report. This activity runs after the Fan-Out/Fan-In step.
 @myApp.activity_trigger(input_name="input_data")
 def generate_report(input_data):
-    return input_data
 
+    logging.info("Generating final PDF analysis report.")
 
+    blob_name = input_data.get("blob_name", "unknown.pdf")
+    file_name = blob_name.split("/")[-1]
+
+    report = {
+        "report_id": str(uuid.uuid4()),
+        "file_name": file_name,
+        "blob_name": blob_name,
+        "blob_size_kb": input_data.get("blob_size_kb", 0),
+        "processed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "completed",
+        "analysis_results": {
+            "text": input_data.get("text", {}),
+            "metadata": input_data.get("metadata", {}),
+            "statistics": input_data.get("statistics", {}),
+            "sensitive_data": input_data.get("sensitive_data", {})
+        }
+    }
+
+    return report
+
+#Activity: store_results: Stores the final report in Azure Table Storage
 @myApp.activity_trigger(input_name="input_data")
 def store_results(input_data):
+
+    logging.info("Storing PDF analysis report in Azure Table Storage.")
+
+    table_client = get_table_client()
+
+    report_id = input_data.get("report_id")
+
+    entity = {
+        "PartitionKey": "PDF_REPORT",
+        "RowKey": report_id,
+        "report_id": report_id,
+        "file_name": input_data.get("file_name", ""),
+        "blob_name": input_data.get("blob_name", ""),
+        "blob_size_kb": input_data.get("blob_size_kb", 0),
+        "processed_at_utc": input_data.get("processed_at_utc", ""),
+        "status": input_data.get("status", "completed"),
+        "report_json": json.dumps(input_data)
+    }
+
+    table_client.upsert_entity(entity=entity)
+
+    logging.info("Report stored successfully with report ID: %s", report_id)
+
     return {
-        "status": "success"
+        "status": "stored",
+        "report_id": report_id,
+        "table_name": TABLE_NAME,
+        "message": "Report stored successfully in Azure Table Storage."
     }
