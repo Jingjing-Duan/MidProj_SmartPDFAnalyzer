@@ -10,6 +10,12 @@
 | Ruaa Thamer | Statistics analysis, sensitive data detection, architecture diagram |
 | Khalid Amchat | Report generation, Table Storage, HTTP retrieval API, README |
 
+## Demo Video
+
+YouTube demo video link:
+
+[`Watch demo video`](https://) 
+
 ## Project Overview
 
 Smart PDF Analyzer is an Azure Durable Functions application that analyzes PDF files uploaded to Azure Blob Storage. When a PDF is uploaded to the `pdfs` container, a Blob Trigger starts a Durable Functions workflow that runs four analysis activities in parallel, generates a final JSON report, stores it in Azure Table Storage, and exposes HTTP endpoints to retrieve the results.
@@ -237,22 +243,6 @@ Reports are stored in the `PdfAnalysisReports` table.
 | `status` | Processing status |
 | `report_json` | Full JSON report |
 
-## Demo Video
-
-YouTube demo video link:
-
-[`Watch demo video`](https://) 
-
-The demo should show local testing, Azure deployment, PDF upload, Function logs, Table Storage, and HTTP API testing.
-
-## Team Contribution Statement
-
-Each team member contributed to a specific part of the project:
-
-- Role 1 built the Blob Trigger, Durable Orchestrator, and deployment workflow.
-- Role 2 implemented PDF text and metadata extraction.
-- Role 3 implemented statistics and sensitive-data analysis.
-- Role 4 implemented report generation, Table Storage, HTTP retrieval, and documentation.
 
 ## AI Disclosure
 
