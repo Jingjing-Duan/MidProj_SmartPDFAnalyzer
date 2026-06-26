@@ -5,7 +5,9 @@ import azure.durable_functions as df
 
 myApp = df.DFApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-#Blob Trigger
+# ==========================================
+# 1. BLOB TRIGGER
+# ==========================================
 @myApp.blob_trigger(
     arg_name="myblob",
     path="pdfs/{name}",
@@ -13,7 +15,6 @@ myApp = df.DFApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 )
 @myApp.durable_client_input(client_name="client")
 async def blob_trigger(myblob: func.InputStream, client):
-
     blob_name = myblob.name
     blob_bytes = myblob.read()
 
@@ -28,14 +29,14 @@ async def blob_trigger(myblob: func.InputStream, client):
         client_input=input_data
     )
 
-    logging.info(
-        f"Started orchestration {instance_id} for {blob_name}"
-    )
+    logging.info(f"Started orchestration {instance_id} for {blob_name}")
     
-#Orchestrator
+
+# ==========================================
+# 2. ORCHESTRATOR
+# ==========================================
 @myApp.orchestration_trigger(context_name="context")
 def pdf_analyzer_orchestrator(context):
-
     input_data = context.get_input()
 
     tasks = [
@@ -56,19 +57,16 @@ def pdf_analyzer_orchestrator(context):
         "sensitive_data": results[3]
     }
 
-    report = yield context.call_activity(
-        "generate_report",
-        report_input
-    )
-
-    stored = yield context.call_activity(
-        "store_results",
-        report
-    )
+    report = yield context.call_activity("generate_report", report_input)
+    stored = yield context.call_activity("store_results", report)
 
     return stored
 
-#Activity placeholders
+
+# ==========================================
+# 3. ACTIVITY FUNCTIONS
+# ==========================================
+
 @myApp.activity_trigger(input_name="input_data")
 def extract_text(input_data):
     return "placeholder"
@@ -83,9 +81,21 @@ def extract_metadata(input_data):
 def analyze_statistics(input_data: dict):
     logging.info("Role 3: Running text statistics analysis activity...")
     try:
-        raw_text = input_data.get("raw_text", input_data.get("text", ""))
-        page_count = input_data.get("page_count", 1)
-        
+        raw_text = ""
+        page_count = 1
+
+        # Fallback handling to extract text from dictionary or sequence structures
+        if isinstance(input_data, dict):
+            raw_text = input_data.get("text", input_data.get("raw_text", input_data.get("extracted_text", "")))
+            page_count = input_data.get("page_count", 1)
+        elif isinstance(input_data, (list, tuple)):
+            for item in input_data:
+                if isinstance(item, dict):
+                    if "text" in item or "raw_text" in item or "extracted_text" in item:
+                        raw_text = item.get("text", item.get("raw_text", item.get("extracted_text", "")))
+                    if "page_count" in item or "pageCount" in item:
+                        page_count = item.get("page_count", item.get("pageCount", 1))
+
         words = raw_text.split()
         word_count = len(words)
         
@@ -108,7 +118,20 @@ def analyze_statistics(input_data: dict):
 def detect_sensitive_data(input_data: dict):
     logging.info("Role 3: Scanning text for sensitive PII data...")
     try:
-        raw_text = input_data.get("raw_text", input_data.get("text", ""))
+        raw_text = ""
+        page_count = 1
+
+        # Fallback handling to extract text from dictionary or sequence structures
+        if isinstance(input_data, dict):
+            raw_text = input_data.get("text", input_data.get("raw_text", input_data.get("extracted_text", "")))
+            page_count = input_data.get("page_count", 1)
+        elif isinstance(input_data, (list, tuple)):
+            for item in input_data:
+                if isinstance(item, dict):
+                    if "text" in item or "raw_text" in item or "extracted_text" in item:
+                        raw_text = item.get("text", item.get("raw_text", item.get("extracted_text", "")))
+                    if "page_count" in item or "pageCount" in item:
+                        page_count = item.get("page_count", item.get("pageCount", 1))
         
         email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
         phone_pattern = r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'
