@@ -2,12 +2,51 @@ import re
 import logging
 import azure.functions as func
 import azure.durable_functions as df
+from datetime import datetime, timezone
+import json
+import os
+import uuid
+from azure.data.tables import TableServiceClient
+from azure.core.exceptions import ResourceNotFoundError
 
+# CREATE THE DURABLE FUNCTION APP
 myApp = df.DFApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-# ==========================================
-# 1. BLOB TRIGGER
-# ==========================================
+# TABLE STORAGE HELPER
+# This helper function creates a connection to Azure Table Storage.
+# For local development, it connects to Azurite Table Storage.
+# In Azure, it connects to the Azure Storage Account.
+# The table is created automatically if it does not already exist.
+TABLE_NAME = os.environ.get("PDF_REPORT_TABLE_NAME", "PdfAnalysisReports")
+
+def get_table_client():
+    """
+    Get a TableClient for storing/retrieving PDF analysis reports.
+    The table is created automatically if it does not already exist.
+    """
+    connection_string = os.environ.get(
+        "PdfStorageConnection",
+        os.environ["AzureWebJobsStorage"]
+    )
+
+    table_service_client = TableServiceClient.from_connection_string(
+        conn_str=connection_string
+    )
+
+    table_client = table_service_client.create_table_if_not_exists(
+        table_name=TABLE_NAME
+    )
+
+    return table_client
+
+#  Return a JSON HTTP response.
+def json_response(data, status_code=200):
+    return func.HttpResponse(
+        json.dumps(data, indent=2),
+        status_code=status_code,
+        mimetype="application/json"
+    )
+#Blob Trigger
 @myApp.blob_trigger(
     arg_name="myblob",
     path="pdfs/{name}",
@@ -167,14 +206,144 @@ def detect_sensitive_data(input_data: dict):
         logging.error(f"Role 3 Sensitive data scan failed: {str(e)}")
         return {"error": str(e)}
 
-
+# Activity: generate_report: Combines the results from the 4 parallel activities
+# into one structured JSON report. This activity runs after the Fan-Out/Fan-In step.
 @myApp.activity_trigger(input_name="input_data")
 def generate_report(input_data):
-    return input_data
 
+    logging.info("Generating final PDF analysis report.")
 
+    blob_name = input_data.get("blob_name", "unknown.pdf")
+    file_name = blob_name.split("/")[-1]
+
+    report = {
+        "report_id": str(uuid.uuid4()),
+        "file_name": file_name,
+        "blob_name": blob_name,
+        "blob_size_kb": input_data.get("blob_size_kb", 0),
+        "processed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "completed",
+        "analysis_results": {
+            "text": input_data.get("text", {}),
+            "metadata": input_data.get("metadata", {}),
+            "statistics": input_data.get("statistics", {}),
+            "sensitive_data": input_data.get("sensitive_data", {})
+        }
+    }
+
+    return report
+
+#Activity: store_results: Stores the final report in Azure Table Storage
 @myApp.activity_trigger(input_name="input_data")
 def store_results(input_data):
-    return {
-        "status": "success"
+
+    logging.info("Storing PDF analysis report in Azure Table Storage.")
+
+    table_client = get_table_client()
+
+    report_id = input_data.get("report_id")
+
+    entity = {
+        "PartitionKey": "PDF_REPORT",
+        "RowKey": report_id,
+        "report_id": report_id,
+        "file_name": input_data.get("file_name", ""),
+        "blob_name": input_data.get("blob_name", ""),
+        "blob_size_kb": input_data.get("blob_size_kb", 0),
+        "processed_at_utc": input_data.get("processed_at_utc", ""),
+        "status": input_data.get("status", "completed"),
+        "report_json": json.dumps(input_data)
     }
+
+    table_client.upsert_entity(entity=entity)
+
+    logging.info("Report stored successfully with report ID: %s", report_id)
+
+    return {
+        "status": "stored",
+        "report_id": report_id,
+        "table_name": TABLE_NAME,
+        "message": "Report stored successfully in Azure Table Storage."
+    }
+
+# HTTP FUNCTION: Get Analysis Reports
+# GET /api/reports: Returns the last 10 reports by default.
+# GET /api/reports?limit=5: Returns the last 5 reports.
+# GET /api/reports/{id}: Returns one specific report by report ID.
+@myApp.route(route="reports/{report_id?}", methods=["GET"])
+def get_report(req: func.HttpRequest) -> func.HttpResponse:
+    report_id = req.route_params.get("report_id")
+
+    try:
+        table_client = get_table_client()
+
+        if report_id:
+            entity = table_client.get_entity(
+                partition_key="PDF_REPORT",
+                row_key=report_id
+            )
+
+            report = json.loads(entity["report_json"])
+
+            return json_response({
+                "mode": "single_report",
+                "report_id": report_id,
+                "report": report
+            })
+
+        limit_param = req.params.get("limit", "10")
+
+        try:
+            limit = int(limit_param)
+        except ValueError:
+            return json_response({
+                "error": "Invalid limit value. Limit must be a number."
+            }, status_code=400)
+
+        if limit <= 0:
+            return json_response({
+                "error": "Limit must be greater than 0."
+            }, status_code=400)
+
+        entities = table_client.query_entities(
+            query_filter="PartitionKey eq 'PDF_REPORT'"
+        )
+
+        reports = []
+
+        for entity in entities:
+            reports.append({
+                "report_id": entity.get("RowKey"),
+                "file_name": entity.get("file_name"),
+                "blob_name": entity.get("blob_name"),
+                "processed_at_utc": entity.get("processed_at_utc"),
+                "status": entity.get("status")
+            })
+
+        reports.sort(
+            key=lambda item: item.get("processed_at_utc") or "",
+            reverse=True
+        )
+
+        limited_reports = reports[:limit]
+
+        return json_response({
+            "mode": "report_list",
+            "count": len(limited_reports),
+            "limit": limit,
+            "reports": limited_reports
+        })
+
+    except ResourceNotFoundError:
+        return json_response({
+            "error": "Report not found",
+            "report_id": report_id
+        }, status_code=404)
+
+    except Exception as error:
+        logging.error("Error in get_report endpoint: %s", error)
+
+        return json_response({
+            "error": "Internal server error while retrieving report data.",
+            "details": str(error)
+        }, status_code=500)
