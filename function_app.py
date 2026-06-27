@@ -141,7 +141,7 @@ def extract_text(input_data):
                 extracted_text += text + "\n"
         
         logging.info(f"Successfully extracted {len(extracted_text)} characters.")
-        return extracted_text  
+        return extracted_text
         
     except Exception as e:
         logging.error(f"Error in extract_text activity: {str(e)}")
@@ -170,7 +170,7 @@ def extract_metadata(input_data):
             "creator": meta.creator if meta and meta.creator else "Unknown",
             "producer": meta.producer if meta and meta.producer else "Unknown",
             "creation_date": str(meta.creation_date) if meta and meta.creation_date else "Unknown",
-            "page_count": len(reader.pages) 
+            "page_count": len(reader.pages)
         }
         
         logging.info(f"Successfully extracted metadata and page count: {len(reader.pages)}")
@@ -304,7 +304,7 @@ def store_results(input_data):
         "blob_name": input_data.get("blob_name", ""),
         "blob_size_kb": input_data.get("blob_size_kb", 0),
         "processed_at_utc": input_data.get("processed_at_utc", ""),
-        "status": input_data.get("status", "completed"),
+        "status": "completed",
         "report_json": json.dumps(input_data)
     }
 
