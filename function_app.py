@@ -33,28 +33,43 @@ async def blob_trigger(myblob: func.InputStream, client):
     
 
 # ==========================================
-# 2. ORCHESTRATOR
+# 2. ORCHESTRATOR (FIXED SEQUENTIAL FLOW)
 # ==========================================
 @myApp.orchestration_trigger(context_name="context")
 def pdf_analyzer_orchestrator(context):
     input_data = context.get_input()
 
-    tasks = [
+    # STEP 1: Extract the text from the PDF first
+    extraction_tasks = [
         context.call_activity("extract_text", input_data),
-        context.call_activity("extract_metadata", input_data),
-        context.call_activity("analyze_statistics", input_data),
-        context.call_activity("detect_sensitive_data", input_data)
+        context.call_activity("extract_metadata", input_data)
     ]
+    extraction_results = yield context.task_all(extraction_tasks)
+    
+    extracted_text_string = extraction_results[0]
+    extracted_metadata_dict = extraction_results[1]
 
-    results = yield context.task_all(tasks)
+    # Create the package containing the text data for your analytics activities
+    analysis_input = {
+        "text": extracted_text_string,
+        "page_count": extracted_metadata_dict.get("page_count", 1) if isinstance(extracted_metadata_dict, dict) else 1
+    }
 
+    # STEP 2: Run your analysis activities in parallel with the real text!
+    analysis_tasks = [
+        context.call_activity("analyze_statistics", analysis_input),
+        context.call_activity("detect_sensitive_data", analysis_input)
+    ]
+    analysis_results = yield context.task_all(analysis_tasks)
+
+    # STEP 3: Assemble the final combined JSON report
     report_input = {
         "blob_name": input_data["blob_name"],
         "blob_size_kb": input_data["blob_size_kb"],
-        "text": results[0],
-        "metadata": results[1],
-        "statistics": results[2],
-        "sensitive_data": results[3]
+        "text": extracted_text_string,
+        "metadata": extracted_metadata_dict,
+        "statistics": analysis_results[0],
+        "sensitive_data": analysis_results[1]
     }
 
     report = yield context.call_activity("generate_report", report_input)
@@ -62,75 +77,19 @@ def pdf_analyzer_orchestrator(context):
 
     return stored
 
+
+# ==========================================
+# 3. ACTIVITY FUNCTIONS
+# ==========================================
+
 @myApp.activity_trigger(input_name="input_data")
 def extract_text(input_data):
-    import io
-    import pypdf
-    import logging
-    
-    logging.info("Activity 'extract_text' started processing PDF...")
-    try:
-        pdf_bytes = bytes(input_data["blob_bytes"])
-        pdf_file = io.BytesIO(pdf_bytes)
-        
-        reader = pypdf.PdfReader(pdf_file)
-        page_count = len(reader.pages)
-        
-        extracted_text = ""
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                extracted_text += text + "\n"
-        
-        logging.info(f"Successfully extracted {len(extracted_text)} characters from {page_count} pages.")
-        
-        return {
-            "raw_text": extracted_text,
-            "page_count": page_count
-        }
-        
-    except Exception as e:
-        logging.error(f"Error in extract_text activity: {str(e)}")
-        return {
-            "raw_text": "",
-            "page_count": 0,
-            "error": str(e)
-        }
+    return "placeholder"
 
-#Extract Metadata
+
 @myApp.activity_trigger(input_name="input_data")
 def extract_metadata(input_data):
-    import io
-    import pypdf
-    import logging
-    
-    logging.info("Activity 'extract_metadata' started processing PDF...")
-    try:
-        pdf_bytes = bytes(input_data["blob_bytes"])
-        pdf_file = io.BytesIO(pdf_bytes)
-        
-        reader = pypdf.PdfReader(pdf_file)
-        meta = reader.metadata
-        
-        pdf_metadata = {
-            "title": meta.title if meta and meta.title else "Unknown",
-            "author": meta.author if meta and meta.author else "Unknown",
-            "subject": meta.subject if meta and meta.subject else "Unknown",
-            "creator": meta.creator if meta and meta.creator else "Unknown",
-            "producer": meta.producer if meta and meta.producer else "Unknown",
-            "creation_date": str(meta.creation_date) if meta and meta.creation_date else "Unknown"
-        }
-        
-        logging.info(f"Successfully extracted metadata: Title={pdf_metadata['title']}")
-        return pdf_metadata
-        
-    except Exception as e:
-        logging.error(f"Error in extract_metadata activity: {str(e)}")
-        return {
-            "title": "Unknown",
-            "author": "Unknown",
-            "error": str(e)
-        }
+    return {}
 
 
 @myApp.activity_trigger(input_name="input_data")
@@ -140,7 +99,6 @@ def analyze_statistics(input_data: dict):
         raw_text = ""
         page_count = 1
 
-        # Fallback handling to extract text from dictionary or sequence structures
         if isinstance(input_data, dict):
             raw_text = input_data.get("text", input_data.get("raw_text", input_data.get("extracted_text", "")))
             page_count = input_data.get("page_count", 1)
@@ -177,7 +135,6 @@ def detect_sensitive_data(input_data: dict):
         raw_text = ""
         page_count = 1
 
-        # Fallback handling to extract text from dictionary or sequence structures
         if isinstance(input_data, dict):
             raw_text = input_data.get("text", input_data.get("raw_text", input_data.get("extracted_text", "")))
             page_count = input_data.get("page_count", 1)
