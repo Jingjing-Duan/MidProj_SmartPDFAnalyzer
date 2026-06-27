@@ -141,7 +141,7 @@ def extract_text(input_data):
                 extracted_text += text + "\n"
         
         logging.info(f"Successfully extracted {len(extracted_text)} characters.")
-        return extracted_text  # 返回纯文本字符串，完美对接新编排器
+        return extracted_text  
         
     except Exception as e:
         logging.error(f"Error in extract_text activity: {str(e)}")
@@ -170,7 +170,7 @@ def extract_metadata(input_data):
             "creator": meta.creator if meta and meta.creator else "Unknown",
             "producer": meta.producer if meta and meta.producer else "Unknown",
             "creation_date": str(meta.creation_date) if meta and meta.creation_date else "Unknown",
-            "page_count": len(reader.pages)  # 极其关键：对接编排器所需的 page_count 键名
+            "page_count": len(reader.pages) 
         }
         
         logging.info(f"Successfully extracted metadata and page count: {len(reader.pages)}")
