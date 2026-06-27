@@ -2,12 +2,15 @@ import re
 import logging
 import azure.functions as func
 import azure.durable_functions as df
-from datetime import datetime, timezone
 import json
 import os
 import uuid
+import io
+import pypdf
+from datetime import datetime, timezone
 from azure.data.tables import TableServiceClient
 from azure.core.exceptions import ResourceNotFoundError
+
 
 # CREATE THE DURABLE FUNCTION APP
 myApp = df.DFApp(http_auth_level=func.AuthLevel.ANONYMOUS)
@@ -112,9 +115,6 @@ def pdf_analyzer_orchestrator(context):
 #Extract Text
 @myApp.activity_trigger(input_name="input_data")
 def extract_text(input_data):
-    import io
-    import pypdf
-    import logging
     
     logging.info("Activity 'extract_text' started processing PDF...")
     try:
@@ -148,9 +148,6 @@ def extract_text(input_data):
 #Extract Metadata
 @myApp.activity_trigger(input_name="input_data")
 def extract_metadata(input_data):
-    import io
-    import pypdf
-    import logging
     
     logging.info("Activity 'extract_metadata' started processing PDF...")
     try:
@@ -181,8 +178,6 @@ def extract_metadata(input_data):
         }
 
 def read_pdf_text_from_blob(input_data):
-    import io
-    import pypdf
 
     pdf_bytes = bytes(input_data["blob_bytes"])
     pdf_file = io.BytesIO(pdf_bytes)
