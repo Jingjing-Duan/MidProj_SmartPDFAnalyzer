@@ -49,7 +49,8 @@ def json_response(data, status_code=200):
         status_code=status_code,
         mimetype="application/json"
     )
-#Blob Trigger
+
+# Blob Trigger
 @myApp.blob_trigger(
     arg_name="myblob",
     path="pdfs/{name}",
@@ -76,7 +77,7 @@ async def blob_trigger(myblob: func.InputStream, client):
         f"Started orchestration {instance_id} for {blob_name}"
     )
     
-#Orchestrator
+# Orchestrator
 @myApp.orchestration_trigger(context_name="context")
 def pdf_analyzer_orchestrator(context):
 
@@ -112,7 +113,7 @@ def pdf_analyzer_orchestrator(context):
 
     return stored
 
-#Extract Text
+# Activity: Extract Text
 @myApp.activity_trigger(input_name="input_data")
 def extract_text(input_data):
     
@@ -145,7 +146,7 @@ def extract_text(input_data):
             "error": str(e)
         }
 
-#Extract Metadata
+# Activity: Extract Metadata
 @myApp.activity_trigger(input_name="input_data")
 def extract_metadata(input_data):
     
@@ -177,6 +178,7 @@ def extract_metadata(input_data):
             "error": str(e)
         }
 
+# Helper function used by analytics activities
 def read_pdf_text_from_blob(input_data):
 
     pdf_bytes = bytes(input_data["blob_bytes"])
@@ -191,6 +193,7 @@ def read_pdf_text_from_blob(input_data):
 
     return raw_text, len(reader.pages)
 
+# Activity: analyze_statistics
 @myApp.activity_trigger(input_name="input_data")
 def analyze_statistics(input_data: dict):
     logging.info("Role 3: Running text statistics analysis activity...")
@@ -215,7 +218,7 @@ def analyze_statistics(input_data: dict):
         logging.error(f"Role 3 Statistics analysis failed: {str(e)}")
         return {"error": str(e)}
 
-
+# Activity: detect_sensitive_data
 @myApp.activity_trigger(input_name="input_data")
 def detect_sensitive_data(input_data: dict):
     logging.info("Role 3: Scanning text for sensitive PII data...")
@@ -244,8 +247,10 @@ def detect_sensitive_data(input_data: dict):
         logging.error(f"Role 3 Sensitive data scan failed: {str(e)}")
         return {"error": str(e)}
 
-# Activity: generate_report: Combines the results from the 4 parallel activities
-# into one structured JSON report. This activity runs after the Fan-Out/Fan-In step.
+# Activity: generate_report
+# Combines the results from the 4 parallel activities
+# into one structured JSON report. 
+# This activity runs after the Fan-Out/Fan-In step.
 @myApp.activity_trigger(input_name="input_data")
 def generate_report(input_data):
 
@@ -271,7 +276,8 @@ def generate_report(input_data):
 
     return report
 
-#Activity: store_results: Stores the final report in Azure Table Storage
+# Activity: store_results
+# Stores the final report in Azure Table Storage
 @myApp.activity_trigger(input_name="input_data")
 def store_results(input_data):
 
