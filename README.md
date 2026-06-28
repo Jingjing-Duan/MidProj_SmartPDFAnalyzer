@@ -14,7 +14,7 @@
 
 YouTube demo video link:
 
-https://youtu.be/bpoAfvCKUrU
+https://youtu.be/79BR6Qtu7Io
 
 ## Project Overview
 
